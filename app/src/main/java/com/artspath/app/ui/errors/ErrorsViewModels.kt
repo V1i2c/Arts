@@ -2,6 +2,7 @@ package com.artspath.app.ui.errors
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewModelScope
 import com.artspath.app.AppGraph
 import com.artspath.app.data.Actions

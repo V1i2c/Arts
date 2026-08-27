@@ -1,6 +1,7 @@
 package com.artspath.app.ui.dashboard
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewModelScope
 import com.artspath.app.AppGraph
 import com.artspath.app.core.Stats
