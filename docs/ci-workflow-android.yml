@@ -10,14 +10,14 @@ concurrency:
 
 jobs:
   build:
-    name: Lint, test & assemble debug APK
+    name: Compile, test, lint & APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -30,18 +30,68 @@ jobs:
         with:
           gradle-version: '9.5.0'
 
-      - name: Lint, unit tests & debug APK
-        run: gradle :app:lintDebug :app:testDebugUnitTest :app:assembleDebug --stacktrace --no-daemon
+      # ---- three separate steps: the failed phase is visible at a glance ----
+
+      - name: "1/3 Compile Kotlin + assemble debug APK"
+        run: |
+          set -o pipefail
+          gradle :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee gradle-compile.log
+
+      - name: "2/3 Unit tests"
+        run: |
+          set -o pipefail
+          gradle :app:testDebugUnitTest --stacktrace --no-daemon 2>&1 | tee gradle-test.log
+
+      - name: "3/3 Android Lint"
+        run: |
+          set -o pipefail
+          gradle :app:lintDebug --stacktrace --no-daemon 2>&1 | tee gradle-lint.log
+
+      # ---- on failure: push the REAL error into annotations (API-readable) ----
+
+      - name: "Surface the real Gradle error"
+        if: failure()
+        run: |
+          set +e
+          rm -f errs.txt final.txt
+          for log in gradle-compile.log gradle-test.log gradle-lint.log; do
+            [ -f "$log" ] || continue
+            echo "=== $log ===" >> errs.txt
+            grep -m1 -A 18 'What went wrong' "$log" >> errs.txt
+            grep -m 12 '^e: ' "$log" >> errs.txt
+            grep -m1 -A 8 'Caused by:' "$log" >> errs.txt
+            grep -E 'Task .*(FAILED|failed)' "$log" | head -3 >> errs.txt
+          done
+          grep -v '^\s*at ' errs.txt | grep -v '^\s*$' | head -12 > final.txt
+          i=0
+          while IFS= read -r line; do
+            i=$((i+1)); [ $i -gt 10 ] && break
+            line=$(printf '%s' "$line" | cut -c1-240)
+            echo "::error title=Gradle ($i/10)::${line}"
+          done < final.txt
+          echo '================ FULL ERROR CONTEXT ================'
+          grep -v '^\s*at ' errs.txt | head -80 || true
+          echo '================ LAST 40 LOG LINES ================='
+          tail -n 40 gradle-*.log 2>/dev/null || true
+
+      - name: Upload full Gradle logs (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-logs
+          path: gradle-*.log
+          if-no-files-found: ignore
 
       - name: Upload test reports (on failure)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: reports
-          path: |
-            app/build/reports/
+          path: app/build/reports/
+          if-no-files-found: ignore
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ArtsPath-debug-APK
