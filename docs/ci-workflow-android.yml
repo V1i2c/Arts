@@ -45,7 +45,7 @@ jobs:
       - name: "3/3 Android Lint"
         run: |
           set -o pipefail
-          gradle :app:lintDebug --stacktrace --no-daemon 2>&1 | tee gradle-lint.log
+          gradle :app:lint --stacktrace --no-daemon 2>&1 | tee gradle-lint.log
 
       # ---- on failure: push the REAL error into annotations (API-readable) ----
 
